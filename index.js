@@ -46,6 +46,11 @@ FloorWalkable.prototype.addWaypoint = function(name, placements) {
     floorWp.lng = placement.lng;
     floorWp.node = graph.addNode(graph.createNode(floorWp));
     graph.addMutualArc(wp.node, floorWp.node);
+    // TODO: check waypoint can be reached from other waypoint
+    for (var i = 0; i < this.waypoints[floorId].length; i++) {
+      var oldWp = this.waypoints[floorId][i];
+      graph.addMutualArc(oldWp.node, floorWp.node);
+    }
     this.waypoints[floorId].push(floorWp);
   }
 };
@@ -58,6 +63,23 @@ FloorWalkable.prototype.findPath = function(
   toLat,
   toLng
 ) {
+  var fullPath = [];
+
+  if (fromFloorId == toFloorId) {
+    var floor = this.floors[fromFloorId];
+    var singleFloorPath = floor.findPath([fromLat, fromLng], [toLat, toLng]);
+    if (singleFloorPath && singleFloorPath.length > 0) {
+      for (var i = 0; i < singleFloorPath.length; i++) {
+        fullPath.push({
+          type: 'walk',
+          latlng: singleFloorPath[i],
+          floorId: toFloorId
+        });
+      }
+      return fullPath;
+    }
+  }
+
   var graph = this.graph;
   var fromFloor = this.floors[fromFloorId];
   var toFloor = this.floors[toFloorId];
@@ -98,45 +120,35 @@ FloorWalkable.prototype.findPath = function(
     return false;
   }
 
-  var fromWaypoint = path.get(1);
-  var toWaypoint = path.get(length - 2);
+  fullPath.push({
+    type: 'walk',
+    latlng: [fromLat, fromLng],
+    floorId: fromFloorId
+  });
 
-  var fromFloorPath = fromFloor.findPath(
-    fromLat,
-    fromLng,
-    fromWaypoint.lat,
-    fromWaypoint.lng
-  );
-  var toFloorPath = toFloor.findPath(
-    toWaypoint.lat,
-    toWaypoint.lng,
-    toLat,
-    toLng
-  );
-
-  var fullPath = [];
-
-  for (var i = 0; i < fromFloorPath.length; i++) {
-    fullPath.push({
-      type: 'walk',
-      latlng: fromFloorPath[i],
-      floorId: fromFloorId
-    });
-  }
-  for (var i = 1; i < path.size() - 1; i++) {
+  for (var i = 1; i < path.size(); i++) {
     var wp = path.get(i);
-    fullPath.push({
-      type: 'waypoint',
-      floorId: wp.floorId,
-      name: wp.name
-    });
-  }
-  for (var i = 0; i < toFloorPath.length; i++) {
-    fullPath.push({
-      type: 'walk',
-      latlng: toFloorPath[i],
-      floorId: toFloorId
-    });
+    var prevWp = path.get(i - 1);
+    if (wp.floorId != prevWp.floorId) {
+      fullPath.push({
+        type: 'waypoint',
+        floorId: wp.floorId,
+        name: wp.name
+      });
+    } else {
+      var floorMesh = this.floors[wp.floorId];
+      var floorPath = floorMesh.findPath(
+        [prevWp.lat, prevWp.lng],
+        [wp.lat, wp.lng]
+      );
+      for (var i = 0; i < floorPath.length; i++) {
+        fullPath.push({
+          type: 'walk',
+          latlng: floorPath[i],
+          floorId: wp.floorId
+        });
+      }
+    }
   }
 };
 
