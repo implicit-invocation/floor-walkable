@@ -89,7 +89,7 @@ FloorWalkable.prototype.findPath = function(
   var path = new DA();
   var astar = new AStar(graph);
 
-  var isPathExist = astar.find(graph, wp1, wp2, path);
+  var isPathExist = astar.find(graph, formWp, toWp, path);
 
   graph.removeNode(fromWp.node);
   graph.removeNode(toWp.node);
