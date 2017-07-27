@@ -33,6 +33,7 @@ FloorWalkable.prototype.addWaypoint = function(name, placements) {
   var wp = new AStarWaypoint();
   wp.name = name;
   wp.node = graph.addNode(graph.createNode(wp));
+
   for (var i = 0; i < placements.length; i++) {
     var placement = placements[i];
     var floorId = placement.floorId;
@@ -46,10 +47,17 @@ FloorWalkable.prototype.addWaypoint = function(name, placements) {
     floorWp.lng = placement.lng;
     floorWp.node = graph.addNode(graph.createNode(floorWp));
     graph.addMutualArc(wp.node, floorWp.node);
-    // TODO: check waypoint can be reached from other waypoint
-    for (var i = 0; i < this.waypoints[floorId].length; i++) {
-      var oldWp = this.waypoints[floorId][i];
-      graph.addMutualArc(oldWp.node, floorWp.node);
+
+    for (var j = 0; j < this.waypoints[floorId].length; j++) {
+      var floor = this.floors[floorId];
+      var oldWp = this.waypoints[floorId][j];
+      var path = floor.findPath(
+        [oldWp.lat, oldWp.lng],
+        [floorWp.lat, floorWp.lng]
+      );
+      if (path.length > 0) {
+        graph.addMutualArc(oldWp.node, floorWp.node);
+      }
     }
     this.waypoints[floorId].push(floorWp);
   }
@@ -89,8 +97,14 @@ FloorWalkable.prototype.findPath = function(
 
   var fromWp = new AStarWaypoint();
   fromWp.floorId = fromFloorId;
+  fromWp.lat = fromLat;
+  fromWp.lng = fromLng;
+  fromWp.temp = true;
   var toWp = new AStarWaypoint();
   toWp.floorId = toFloorId;
+  toWp.lat = toLat;
+  toWp.lng = toLng;
+  toWp.temp = true;
 
   fromWp.node = graph.addNode(graph.createNode(fromWp));
   toWp.node = graph.addNode(graph.createNode(toWp));
@@ -98,7 +112,25 @@ FloorWalkable.prototype.findPath = function(
   var fromWaypoints = this.waypoints[fromFloorId];
   var toWaypoints = this.waypoints[toFloorId];
 
-  // TODO: check whether starting point and goal can reach waypoints
+  // CHECKED: check whether starting point and goal can reach waypoints
+  var isFromWaypointReachable = false;
+  var isToWaypointReachable = false;
+  for (var i = 0; i < fromWaypoints.length; i++) {
+    var fromPath = fromFloor.findPath(
+      [fromLat, fromLng],
+      [fromWaypoints[i].lat, fromWaypoints[i].lng]
+    );
+    if (fromPath.length > 0) isFromWaypointReachable = true;
+  }
+  for (var i = 0; i < toWaypoints.length; i++) {
+    var toPath = toFloor.findPath(
+      [toLat, toLng],
+      [toWaypoints[i].lat, toWaypoints[i].lng]
+    );
+    if (toPath.length > 0) isToWaypointReachable = true;
+  }
+
+  if (!isFromWaypointReachable || !isToWaypointReachable) return false;
 
   for (var i = 0; i < fromWaypoints.length; i++) {
     graph.addMutualArc(fromWp.node, fromWaypoints[i].node);
@@ -111,7 +143,7 @@ FloorWalkable.prototype.findPath = function(
   var path = new DA();
   var astar = new AStar(graph);
 
-  var isPathExist = astar.find(graph, formWp, toWp, path);
+  var isPathExist = astar.find(graph, fromWp, toWp, path);
 
   graph.removeNode(fromWp.node);
   graph.removeNode(toWp.node);
@@ -130,26 +162,40 @@ FloorWalkable.prototype.findPath = function(
     var wp = path.get(i);
     var prevWp = path.get(i - 1);
     if (wp.floorId != prevWp.floorId) {
-      fullPath.push({
-        type: 'waypoint',
-        floorId: wp.floorId,
-        name: wp.name
-      });
+      if (wp.floorId) {
+        if (!prevWp.temp) {
+          fullPath[fullPath.length - 1].connectedFloorId = wp.floorId;
+        }
+        fullPath.push({
+          type: 'waypoint',
+          floorId: wp.floorId,
+          name: wp.name,
+          connectedFloorId: fullPath[fullPath.length - 1].floorId
+        });
+      }
     } else {
       var floorMesh = this.floors[wp.floorId];
       var floorPath = floorMesh.findPath(
         [prevWp.lat, prevWp.lng],
         [wp.lat, wp.lng]
       );
-      for (var i = 0; i < floorPath.length; i++) {
+      for (var j = 0; j < floorPath.length; j++) {
         fullPath.push({
           type: 'walk',
-          latlng: floorPath[i],
+          latlng: floorPath[j],
           floorId: wp.floorId
+        });
+      }
+      if (!wp.temp) {
+        fullPath.push({
+          type: 'waypoint',
+          floorId: wp.floorId,
+          name: wp.name
         });
       }
     }
   }
+  return fullPath;
 };
 
 module.exports = FloorWalkable;
