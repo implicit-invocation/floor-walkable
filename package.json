@@ -1,6 +1,6 @@
 {
   "name": "floor-walkable",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -17,7 +17,7 @@
   },
   "homepage": "https://github.com/implicit-invocation/floor-walkable#readme",
   "dependencies": {
-    "js-polygonal": "^1.0.2",
+    "js-polygonal": "^1.0.3",
     "walkable": "^1.0.3",
     "world-walkable": "^1.0.5"
   }
